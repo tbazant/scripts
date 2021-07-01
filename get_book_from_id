@@ -32,7 +32,8 @@ sub recurse {
     $file = extract_filename($line);
     chomp($file);
     $result[$row][$depth] = $file;
-    $cmd = "grep 'href=\"$file\"' xml/*.xml | egrep -v \"(link|xml-stylesheet|xml-model)\"";
+    $cmd = "egrep 'include\\s+href\\s*=\"$file\"' xml/*.xml";
+    #$cmd = "grep 'href=\"$file\"' xml/*.xml | egrep -v \"(link|xml-stylesheet|xml-model)\"";
     $depth++;
     recurse($cmd);
   }

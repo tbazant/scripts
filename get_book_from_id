@@ -32,7 +32,7 @@ sub recurse {
     $file = extract_filename($line);
     chomp($file);
     $result[$row][$depth] = $file;
-    $cmd = "grep -r 'href=\"$file\"' xml/";
+    $cmd = "grep -r 'include href=\"$file\"' xml/";
     $depth++;
     recurse($cmd);
   }

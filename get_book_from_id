@@ -25,15 +25,14 @@ foreach my $row (@result) {
 sub recurse {
   my $cmd = shift;
   my @lines = qx($cmd);
+  print Dumper(@lines);
   if(@lines == 0) {
     $row++;
   }
   foreach my $line (@lines) {
-    $file = extract_filename($line);
-    chomp($file);
+    my $file = extract_filename($line);
     $result[$row][$depth] = $file;
-    $cmd = "egrep 'include\\s+href\\s*=\"$file\"' xml/*.xml";
-    #$cmd = "grep 'href=\"$file\"' xml/*.xml | egrep -v \"(link|xml-stylesheet|xml-model)\"";
+    my $cmd = "grep 'href=\"$file\"' xml/*.xml | egrep -v \"(link|xml-stylesheet|xml-model)\"";
     $depth++;
     recurse($cmd);
   }
@@ -44,6 +43,7 @@ sub extract_filename {
   my $line = shift;
   my @arr = split(':', $line);
   @arr = split('/', $arr[0]);
+  chomp($arr[1]);
   return $arr[1];
 }
 

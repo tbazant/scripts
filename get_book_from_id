@@ -6,37 +6,70 @@ use Data::Dumper;
 
 die "No XML ID given!" unless $ARGV[0];
 
-my($cmd, $file, @result);
-my $row = 0;
-my $depth = 0;
+our %result = ();
+our @kid_arr = ();
+our @new_order = ();
+our $DEBUG = 0;
 
-$cmd = "grep -r 'xml:id=\"$ARGV[0]\"' xml/";
-recurse($cmd);
-if (@result == 0) {
-  die "XML ID not found!";
+my $cmd = "grep -r 'xml:id=\"$ARGV[0]\"' xml/";
+debug($cmd);
+
+foreach (qx($cmd)) {
+  debug($_);
+  my $file = extract_filename($_);
+  recurse($file);
 }
-my $base_file = $result[0][0];
-foreach my $row (@result) {
-  $row->[0] = $base_file;
-  print join(' -> ', @$row);
+
+foreach (get_toplevels(\%result)) {
+  @kid_arr = ();
+  my @arr = ($_);
+  push (@arr, recurse_kids($result{$_}));
+  push (@new_order, \@arr);
+}
+
+foreach my $row (@new_order) {
+  print $ARGV[0] . ": ";
+  print join(' -> ', @{$row});
   print "\n";
 }
 
+sub get_toplevels {
+  my $result = shift;
+  my @toplevels = @_;
+  my @keys = keys(%{$result});
+  my @vals = values(%{$result});
+  foreach my $key (@keys) {
+    unless (grep( /^$key$/, @vals) ) {
+      debug("toplevel: $key" );
+      push (@toplevels, $key);
+    }
+  }
+  return @toplevels;
+}
+
+sub recurse_kids {
+  my $kid = shift;
+  if (grep(/^$kid$/, values(%result))) {
+    push(@kid_arr, $kid);
+    if(exists($result{$kid})) {
+      recurse_kids($result{$kid});
+    } else {
+      return @kid_arr;
+    }
+  }
+}
+
+
 sub recurse {
-  my $cmd = shift;
+  my $old_file = shift;
+  debug($old_file);
+  my $cmd = "grep 'href=\"$old_file\"' xml/*.xml | egrep -v \"(link|xml-stylesheet|xml-model)\"";
   my @lines = qx($cmd);
-  print Dumper(@lines);
-  if(@lines == 0) {
-    $row++;
+  foreach (@lines) {
+    my $file = extract_filename($_);
+    $result{$file} = $old_file;
+    recurse($file);
   }
-  foreach my $line (@lines) {
-    my $file = extract_filename($line);
-    $result[$row][$depth] = $file;
-    my $cmd = "grep 'href=\"$file\"' xml/*.xml | egrep -v \"(link|xml-stylesheet|xml-model)\"";
-    $depth++;
-    recurse($cmd);
-  }
-  $depth = 1;
 }
 
 sub extract_filename {
@@ -46,4 +79,8 @@ sub extract_filename {
   chomp($arr[1]);
   return $arr[1];
 }
-
+sub debug {
+  my $msg = shift;
+  chomp($msg);
+  print STDERR "DEBUG: $msg\n" if $DEBUG;
+}

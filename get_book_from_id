@@ -9,8 +9,10 @@ die "No XML ID given!" unless $ARGV[0];
 our %result = ();
 our @kid_arr = ();
 our @new_order = ();
-our $DEBUG = 0;
+our $DEBUG = 1;
 
+# assemble the initial cmd, run it
+# and iterate over returned results recursively
 my $cmd = "grep -r 'xml:id=\"$ARGV[0]\"' xml/";
 debug($cmd);
 
@@ -19,6 +21,9 @@ foreach (qx($cmd)) {
   my $file = extract_filename($_);
   recurse($file);
 }
+
+debug("result hash: \n");
+print Dumper(%result) if $DEBUG;
 
 foreach (get_toplevels(\%result)) {
   @kid_arr = ();
@@ -59,11 +64,15 @@ sub recurse_kids {
   }
 }
 
-
+# find which files are referring the file sent as an argument
+# and for each of these file, do the same recursively
+# and store the line-ups in a resulting hash
+# intil no referrer is found
 sub recurse {
   my $old_file = shift;
-  debug($old_file);
+  debug('old file: ' . $old_file);
   my $cmd = "grep 'href=\"$old_file\"' xml/*.xml | egrep -v \"(link|xml-stylesheet|xml-model)\"";
+  debug($cmd);
   my @lines = qx($cmd);
   foreach (@lines) {
     my $file = extract_filename($_);
@@ -79,6 +88,7 @@ sub extract_filename {
   chomp($arr[1]);
   return $arr[1];
 }
+
 sub debug {
   my $msg = shift;
   chomp($msg);

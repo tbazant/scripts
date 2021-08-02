@@ -3,18 +3,34 @@
 use strict;
 use warnings;
 use Data::Dumper;
+use Getopt::Long;
+use File::Basename;
+use Pod::Usage;
 
-die "No XML ID given!" unless $ARGV[0];
+my $man = 0;
+my $help = 0;
+
+our $xml_id = $ARGV[0];
+our $debug = '';
+our $path = 'xml/';
+
+GetOptions (
+  'help|?' => \$help,
+  'debug' => \$debug,
+  'xml-id=s' => \$xml_id,
+  'path:s' => \$path,
+) or pod2usage(2);
+pod2usage(1) if $help;
+pod2usage(-exitval => 0, -verbose => 2) if $man;
 
 our %result = ();
 our %lnums = ();
 our @kid_arr = ();
 our @new_order = ();
-our $DEBUG = 0;
 
 # assemble the initial cmd, run it
 # and iterate over returned results recursively
-my $cmd = "grep -n 'xml:id=\"$ARGV[0]\"' xml/*.xml";
+my $cmd = "grep -n 'xml:id=\"" . $xml_id . "\"' " . $path . "*.xml";
 debug($cmd);
 
 foreach (qx($cmd)) {
@@ -25,7 +41,7 @@ foreach (qx($cmd)) {
 }
 
 debug("result hash: \n");
-print Dumper(%result) if $DEBUG;
+print Dumper(%result) if $debug;
 
 foreach (get_toplevels(\%result)) {
   @kid_arr = ();
@@ -35,7 +51,7 @@ foreach (get_toplevels(\%result)) {
 }
 
 foreach my $row (@new_order) {
-  print $ARGV[0] . ": ";
+  print $xml_id . ": ";
   print join(' -> ', @{$row});
   print "\n";
 }
@@ -57,7 +73,7 @@ sub get_toplevels {
 sub recurse_kids {
   my $kid = shift;
   if (grep(/^$kid$/, values(%result))) {
-    push(@kid_arr, $kid . ' +'. $lnums{$kid});
+    push(@kid_arr, $path . $kid . ' +'. $lnums{$kid});
     if(exists($result{$kid})) {
       recurse_kids($result{$kid});
     } else {
@@ -74,7 +90,7 @@ sub recurse {
   my $opts = shift;
   my $old_file = $opts->{fname};
   debug('old file: ' . $old_file);
-  my $cmd = "grep -n 'href=\"$old_file\"' xml/*.xml | egrep -v \"(link|xml-stylesheet|xml-model)\"";
+  my $cmd = "grep -n 'href=\"$old_file\"' " . $path . "*.xml | egrep -v \"(link|xml-stylesheet|xml-model)\"";
   debug($cmd);
   my @lines = qx($cmd);
   foreach (@lines) {
@@ -89,11 +105,11 @@ sub recurse {
 sub extract_filename {
   my $line = shift;
   my @arr = split(':', $line);
+  my $path = $arr[0];
   my $lnum = $arr[1];
-  @arr = split('/', $arr[0]);
-  chomp($arr[1]);
+  my ($fname, $dirs) = fileparse($path);
   my $result = {
-    'fname' => $arr[1],
+    'fname' => $fname,
     'lnum' => $lnum,
   };
   return $result;
@@ -102,5 +118,39 @@ sub extract_filename {
 sub debug {
   my $msg = shift;
   chomp($msg);
-  print STDERR "DEBUG: $msg\n" if $DEBUG;
+  print STDERR "DEBUG: $msg\n" if $debug;
 }
+
+__END__
+=head1 NAME
+
+get_book_from_id - find where the given XML ID belongs in a docbook structure
+
+=head1 SYNOPSIS
+
+get_book_from_id [options]
+
+=head1 OPTIONS
+
+=over 8
+
+=item B<-h or --help>
+
+Print a brief help message and exits.
+
+=item B<-d or --debug>
+
+Print detailed debug messages.
+
+=item B<-x or --xml-id>
+
+XML ID to be examined for its ancestors.
+
+=item B<-p or --path>
+
+Path where DocBook XML files are stored. Default is 'xml/'.
+
+
+=back
+
+=cut

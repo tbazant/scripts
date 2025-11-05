@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+
 #
 # This script demuxes audio files into stem streams using a Docker container.
 # It can process a single file or a playlist of files.
@@ -17,10 +18,13 @@ CACHE_DIR="$HOME/.cache/stemgen_docker_cache"
 # Function to display usage information and exit.
 usage() {
     echo "Usage: $0 -o <output_dir> [-f <input_file> | -p <playlist_file>] [-g]"
-    echo "  -o <output_dir>      : Directory to store the output."
-    echo "  -f <input_file>      : A single audio file to process."
-    echo "  -p <playlist_file>   : A playlist file (e.g., m3u) with a list of audio files."
-    echo "  -g                   : Use GPU for processing ('--gpus all' for Docker)."
+    echo "  -o <output_dir>        : Directory to store the output."
+    echo "  -f <input_file>        : A single audio file to process."
+    echo "  -p <playlist_file>     : A playlist file (e.g., m3u) with a list of audio files."
+    echo "  -g                     : Use GPU for processing ('--gpus all' for Docker)."
+    echo "  --model <model_name>   : Separation model to use (e.g., htdemucs_ft). Default: htdemucs."
+    echo "  --shifts <integer>     : Number of random shifts for equivariant stabilization. Default: 1."
+    echo "  --force                : Remove output file if it already exists before processing."
     echo
     echo "This script uses Docker to run '${DOCKER_IMAGE}' for processing."
     echo "The container is expected to handle the demuxing and remuxing."
@@ -32,6 +36,7 @@ usage() {
 #   $1: Path to the audio file.
 #   $2: Base output directory.
 process_file() {
+    # These are global variables from the main script
     local song_path="$1"
     local base_output_dir="$2"
 
@@ -49,29 +54,32 @@ process_file() {
     dir_path=$(dirname "$abs_path")
     local filename
     filename=$(basename "$abs_path")
-    # The parent directory of the song file (e.g., 'interpret' or 'album')
-    local parent_dir
-    parent_dir=$(basename "$dir_path")
-
-    # The output subdirectory is the parent directory of the song file.
-    local rel_output_dir="$parent_dir"
 
     echo "Processing: $filename"
     echo "  Source directory (mounted as /input): $dir_path"
     echo "  Output directory (mounted as /output): $base_output_dir"
-    echo "  Output will be in container path: /output/$rel_output_dir"
+
+    # Check if the output file already exists and remove it if --force is used.
+    # The output of stemgen is always an M4A container.
+    local filename_no_ext="${filename%.*}"
+    local output_file="$base_output_dir/$filename_no_ext.m4a"
+    if [[ "$force_overwrite" = true && -f "$output_file" ]]; then
+        echo "  --force: Removing existing output file '$output_file'"
+        rm -f "$output_file"
+    fi
 
     # Run the Docker container to process the file.
     # The container is expected to take an input file and an output directory.
     # The 'docker_gpu_args' is a global variable. We want word splitting here.
     # shellcheck disable=SC2086
-    if ! docker run --rm ${docker_gpu_args} \
+    # The 'stemgen_args' is a global variable. We want word splitting here.
+    # shellcheck disable=SC2086
+    if ! docker run --rm -t ${docker_gpu_args} \
         -v "$dir_path:/input:ro" \
-        -u "$(id -u):$(id -g)" \
+        -u "$(id -u):$(id -g)"  \
         -v "$base_output_dir:/output" \
         -v "$CACHE_DIR:/home/stemgen/.cache:rw" \
-        "${DOCKER_IMAGE}" \
-        generate "/input/$filename" "/output/$rel_output_dir"; then
+       "${DOCKER_IMAGE}" generate "${stemgen_args[@]}" "/input/$filename" "/output/"; then
         echo "Error: Docker command failed for '$filename'." >&2
     else
         echo "Successfully processed '$filename'."
@@ -85,27 +93,32 @@ output_dir=""
 input_file=""
 playlist_file=""
 docker_gpu_args=""
+declare -a stemgen_args=()
+force_overwrite=false
 
 # Parse command-line options
-while getopts ":o:f:p:g-" opt; do
-    case ${opt} in
-        o) output_dir=$OPTARG ;;
-        f) input_file=$OPTARG ;;
-        p) playlist_file=$OPTARG ;;
-        g) docker_gpu_args="--gpus all" ;;
-        -)
-            case "${OPTARG}" in
-                gpu)
-                    docker_gpu_args="--gpus all"
-                    ;;
-                *)
-                    echo "Invalid option: --${OPTARG}" >&2
-                    usage
-                    ;;
-            esac
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -o) output_dir="$2"; shift 2 ;;
+        -f) input_file="$2"; shift 2 ;;
+        -p) playlist_file="$2"; shift 2 ;;
+        -g|--gpu) docker_gpu_args="--gpus all"; shift ;;
+        --model)
+            stemgen_args+=(--model "$2")
+            shift 2
             ;;
-        \?) echo "Invalid option: -$OPTARG" >&2; usage ;;
-        :) echo "Option -$OPTARG requires an argument." >&2; usage ;;
+        --force)
+            force_overwrite=true
+            shift
+            ;;
+        --shifts)
+            stemgen_args+=(--shifts "$2")
+            shift 2
+            ;;
+        *)
+            echo "Unknown option: $1"
+            usage
+            ;;
     esac
 done
 

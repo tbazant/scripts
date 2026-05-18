@@ -3,7 +3,8 @@
 set -euo pipefail
 
 # --- Configuration ---
-DOCKER_IMAGE="aclmb/stemgen:main-cuda"
+#DOCKER_IMAGE="aclmb/stemgen:main-cuda"
+DOCKER_IMAGE="aclmb/stemgen:latest-cuda"
 CACHE_DIR="$HOME/.cache/stemgen_docker_cache"
 
 # --- Functions ---

@@ -240,11 +240,6 @@ if [[ -z "$input_file" && -z "$track_list_file" ]]; then
     usage
 fi
 
-# Hardcode a default model. The container fails silently if none is provided.
-# The tool's source code indicates 'htdemucs_ft' is the intended default, and
-# previous failures to find it were likely due to a permissions issue.
-stemgen_opts_array+=(--model "htdemucs_ft")
-
 # Automatically detect GPU and set Docker arguments
 check_for_update
 
